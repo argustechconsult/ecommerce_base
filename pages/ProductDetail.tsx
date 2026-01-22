@@ -17,6 +17,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId }) => {
   const [isAdded, setIsAdded] = useState(false);
 
   useEffect(() => {
+    // Rola para o topo da página imediatamente ao abrir os detalhes
+    window.scrollTo(0, 0);
+
     const foundProduct = products.find(p => p.id === productId);
     if (foundProduct) {
       setProduct(foundProduct);
@@ -102,11 +105,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId }) => {
           </p>
 
           <div className="space-y-8 mb-10">
-            {/* Color Selection */}
+            {/* Subvariation Selection (ex: Cor) */}
             {product.colors && product.colors.length > 0 && (
               <div>
                 <label className="block text-sm font-black uppercase tracking-widest text-slate-400 mb-4">
-                  Cor: <span className="text-slate-900 dark:text-white">{selectedColor}</span>
+                  Subvariação: <span className="text-slate-900 dark:text-white">{selectedColor}</span>
                 </label>
                 <div className="flex gap-3">
                   {product.colors.map((c) => (
@@ -128,12 +131,12 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId }) => {
               </div>
             )}
 
-            {/* Size Selection */}
+            {/* Variation Selection (ex: Tamanho) */}
             {product.sizes && product.sizes.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <label className="text-sm font-black uppercase tracking-widest text-slate-400">Selecionar Tamanho</label>
-                  <button className="text-xs font-bold text-primary-600 hover:underline">Guia de Medidas</button>
+                  <label className="text-sm font-black uppercase tracking-widest text-slate-400">Selecionar Variação</label>
+                  <button className="text-xs font-bold text-primary-600 hover:underline">Guia de Referência</button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {product.sizes.map((s) => (
@@ -183,17 +186,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId }) => {
           </div>
 
           {/* Meta Info */}
-          <div className="mt-12 grid grid-cols-2 gap-6 pt-8 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-12 pt-8 border-t border-slate-100 dark:border-slate-800">
             <div>
               <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Disponibilidade</p>
               <p className="text-sm font-bold flex items-center gap-1.5 text-emerald-500">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Em estoque ({product.stock} unidades)
               </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Entrega</p>
-              <p className="text-sm font-bold">Frete Grátis Express</p>
             </div>
           </div>
         </div>

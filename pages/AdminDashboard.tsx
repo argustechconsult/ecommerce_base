@@ -6,7 +6,6 @@ import {
 import { 
   Package, 
   Users, 
-  // Fix: Added missing User icon import aliased as UserIcon
   User as UserIcon,
   ShoppingBag, 
   TrendingUp, 
@@ -20,11 +19,6 @@ import {
   Upload,
   X,
   Layers,
-  Calendar,
-  CreditCard,
-  Mail,
-  MoreVertical,
-  ExternalLink,
   ArrowLeft,
   Check,
   Printer,
@@ -33,31 +27,47 @@ import {
   Eye,
   AlertCircle,
   MapPin,
-  Phone
+  Phone,
+  ChevronLeft,
+  Menu,
+  Mail,
+  MoreVertical,
+  Palette,
+  ChevronRight,
+  Filter,
+  PackageCheck,
+  Clock,
+  Ban
 } from 'lucide-react';
-import { MOCK_ORDERS, MOCK_CUSTOMERS } from '../constants';
-import { Product, Order } from '../types';
+import { MOCK_CUSTOMERS } from '../constants';
+import { Product, Order, Category } from '../types';
 import { useApp } from '../context/AppContext';
 
 const AdminDashboard: React.FC = () => {
   const { 
     products, addProduct, updateProduct, deleteProduct,
+    orders, updateOrderStatus,
     categories: availableCategories, addCategory, updateCategory, deleteCategory
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'customers' | 'categories'>('overview');
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('Todos');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<Order['status'] | 'All'>('All');
   const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   // Estados para Produtos
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [newSize, setNewSize] = useState('');
+  const [newColorName, setNewColorName] = useState('');
+  const [newColorHex, setNewColorHex] = useState('#7c3aed');
   
   // Estados para Categorias
   const [isAddingCategory, setIsAddingCategory] = useState(false);
-  const [editingCategoryOldName, setEditingCategoryOldName] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryInputValue, setCategoryInputValue] = useState('');
+  const [parentCategoryId, setParentCategoryId] = useState<string>('');
 
   // Estados para Pedidos Profissionais
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -68,7 +78,8 @@ const AdminDashboard: React.FC = () => {
     description: '',
     price: '',
     stock: '',
-    category: availableCategories[1] || availableCategories[0],
+    category: availableCategories[1]?.name || 'Sem Categoria',
+    subCategory: '',
     images: [] as string[],
     sizes: [] as string[],
     colors: [] as { name: string, hex: string }[]
@@ -78,7 +89,7 @@ const AdminDashboard: React.FC = () => {
 
   const stats = [
     { label: 'Receita Total', value: 'R$ 24.560,00', change: '+12.5%', icon: TrendingUp, color: 'text-emerald-500' },
-    { label: 'Total de Pedidos', value: '456', change: '+18.2%', icon: ShoppingBag, color: 'text-blue-500' },
+    { label: 'Total de Pedidos', value: orders.length.toString(), change: '+18.2%', icon: ShoppingBag, color: 'text-blue-500' },
     { label: 'Produtos Ativos', value: products.length.toString(), change: '+2 novos', icon: Package, color: 'text-primary-500' },
     { label: 'Total de Clientes', value: '1.230', change: '+5.4%', icon: Users, color: 'text-violet-500' },
   ];
@@ -102,6 +113,7 @@ const AdminDashboard: React.FC = () => {
       price: parseFloat(formData.price),
       stock: parseInt(formData.stock),
       category: formData.category,
+      subCategory: formData.subCategory || undefined,
       image: formData.images[0] || 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&q=80&w=800',
       secondaryImages: formData.images.slice(1),
       rating: editingProduct?.rating || 5.0,
@@ -115,33 +127,68 @@ const AdminDashboard: React.FC = () => {
   };
 
   const resetProductForm = () => {
-    setFormData({ name: '', description: '', price: '', stock: '', category: availableCategories[1] || availableCategories[0], images: [], sizes: [], colors: [] });
+    setFormData({ name: '', description: '', price: '', stock: '', category: availableCategories[1]?.name || 'Sem Categoria', subCategory: '', images: [], sizes: [], colors: [] });
     setIsAddingProduct(false);
     setEditingProduct(null);
     setNewSize('');
+    setNewColorName('');
+    setNewColorHex('#7c3aed');
+  };
+
+  const handleAddSize = () => {
+    if (newSize.trim()) {
+      setFormData(prev => ({ ...prev, sizes: [...prev.sizes, newSize.trim()] }));
+      setNewSize('');
+    }
+  };
+
+  const handleAddColor = () => {
+    if (newColorName.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        colors: [...prev.colors, { name: newColorName.trim(), hex: newColorHex }]
+      }));
+      setNewColorName('');
+    }
+  };
+
+  const removeSize = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      sizes: prev.sizes.filter((_, i) => i !== index)
+    }));
+  };
+
+  const removeColor = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      colors: prev.colors.filter((_, i) => i !== index)
+    }));
   };
 
   const handleSaveCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!categoryInputValue.trim()) return;
 
-    if (editingCategoryOldName) {
-      updateCategory(editingCategoryOldName, categoryInputValue.trim());
+    if (editingCategory) {
+      updateCategory(editingCategory.id, categoryInputValue.trim(), parentCategoryId || undefined);
     } else {
-      addCategory(categoryInputValue.trim());
+      addCategory(categoryInputValue.trim(), parentCategoryId || undefined);
     }
     resetCategoryForm();
   };
 
   const resetCategoryForm = () => {
     setCategoryInputValue('');
+    setParentCategoryId('');
     setIsAddingCategory(false);
-    setEditingCategoryOldName(null);
+    setEditingCategory(null);
   };
 
-  const startEditCategory = (catName: string) => {
-    setEditingCategoryOldName(catName);
-    setCategoryInputValue(catName);
+  const startEditCategory = (cat: Category) => {
+    setEditingCategory(cat);
+    setCategoryInputValue(cat.name);
+    setParentCategoryId(cat.parentId || '');
     setIsAddingCategory(true);
   };
 
@@ -165,83 +212,115 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Funções de Impressão
   const handlePrint = () => {
     window.print();
   };
 
+  // Helper para agrupar categorias e subcategorias
+  const mainCategories = availableCategories.filter(c => !c.parentId && c.id !== 'cat-todos');
+  const getSubcategories = (parentId: string) => availableCategories.filter(c => c.parentId === parentId);
+
+  // Filtragem de Pedidos
+  const filteredOrders = orders.filter(order => {
+    if (orderStatusFilter === 'All') return true;
+    return order.status === orderStatusFilter;
+  });
+
   return (
-    <div className="flex flex-col lg:flex-row -mx-4 min-h-[calc(100vh-5rem)]">
-      {/* Sidebar de Navegação */}
-      <aside className="w-full lg:w-64 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-8 print:hidden">
-        <div>
-          <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-4 px-3">Painel de Controle</h3>
-          <nav className="space-y-1">
-            {[
-              { id: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
-              { id: 'products', label: 'Produtos', icon: Package },
-              { id: 'categories', label: 'Categorias', icon: Layers },
-              { id: 'orders', label: 'Pedidos', icon: ShoppingBag },
-              { id: 'customers', label: 'Clientes', icon: Users },
-            ].map((link) => (
-              <button
-                key={link.id}
-                onClick={() => setActiveTab(link.id as any)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                  activeTab === link.id 
-                    ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/20' 
-                    : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <link.icon size={18} />
-                {link.label}
-              </button>
-            ))}
-          </nav>
+    <div className="flex h-[calc(100vh-5rem)] w-full overflow-hidden">
+      {/* Sidebar de Navegação Colapsável */}
+      <aside 
+        className={`bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 ease-in-out print:hidden ${
+          isSidebarCollapsed ? 'w-20' : 'w-72'
+        }`}
+      >
+        <div className="p-4 flex justify-end">
+          <button 
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors"
+          >
+            {isSidebarCollapsed ? <Menu size={20} /> : <ChevronLeft size={20} />}
+          </button>
         </div>
 
-        <div>
-          <button 
-            onClick={() => setIsCategoriesExpanded(!isCategoriesExpanded)}
-            className="w-full flex items-center justify-between px-3 mb-4 group text-xs font-black uppercase text-slate-400 tracking-widest hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-          >
-            Acesso Rápido
-            <ChevronDown size={14} className={`transition-transform duration-300 ${isCategoriesExpanded ? 'rotate-180' : ''}`} />
-          </button>
-          
-          <div className={`space-y-1 overflow-hidden transition-all duration-300 ${isCategoriesExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-            <nav className="space-y-1">
-              {availableCategories.map((cat) => (
+        <div className="flex-1 overflow-y-auto no-scrollbar py-2">
+          <div className="mb-6">
+            {!isSidebarCollapsed && (
+              <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-4 px-6">Painel de Controle</h3>
+            )}
+            <nav className="space-y-1 px-3">
+              {[
+                { id: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
+                { id: 'products', label: 'Produtos', icon: Package },
+                { id: 'categories', label: 'Categorias', icon: Layers },
+                { id: 'orders', label: 'Pedidos', icon: ShoppingBag },
+                { id: 'customers', label: 'Clientes', icon: Users },
+              ].map((link) => (
                 <button
-                  key={cat}
-                  onClick={() => { setActiveTab('products'); setActiveCategoryFilter(cat); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    activeTab === 'products' && activeCategoryFilter === cat
-                      ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/10'
+                  key={link.id}
+                  onClick={() => setActiveTab(link.id as any)}
+                  title={isSidebarCollapsed ? link.label : undefined}
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-bold transition-all ${
+                    activeTab === link.id 
+                      ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/20' 
                       : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
+                  } ${isSidebarCollapsed ? 'justify-center' : ''}`}
                 >
-                  <Tag size={16} />
-                  {cat}
+                  <link.icon size={20} />
+                  {!isSidebarCollapsed && <span>{link.label}</span>}
                 </button>
               ))}
             </nav>
+          </div>
+
+          <div>
+            {!isSidebarCollapsed && (
+              <button 
+                onClick={() => setIsCategoriesExpanded(!isCategoriesExpanded)}
+                className="w-full flex items-center justify-between px-6 mb-4 group text-xs font-black uppercase text-slate-400 tracking-widest hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              >
+                Categorias
+                <ChevronDown size={14} className={`transition-transform duration-300 ${isCategoriesExpanded ? 'rotate-180' : ''}`} />
+              </button>
+            )}
+            
+            {(isCategoriesExpanded || isSidebarCollapsed) && (
+              <div className={`space-y-1 px-3 overflow-hidden transition-all duration-300`}>
+                <nav className="space-y-1">
+                  {mainCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => { setActiveTab('products'); setActiveCategoryFilter(cat.name); }}
+                      title={isSidebarCollapsed ? cat.name : undefined}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
+                        activeTab === 'products' && activeCategoryFilter === cat.name
+                          ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/10'
+                          : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      } ${isSidebarCollapsed ? 'justify-center' : ''}`}
+                    >
+                      <Tag size={16} />
+                      {!isSidebarCollapsed && <span className="truncate">{cat.name}</span>}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            )}
           </div>
         </div>
       </aside>
 
       {/* Área de Conteúdo Principal */}
-      <main className="flex-1 p-6 lg:p-10 animate-in fade-in duration-500 overflow-y-auto print:p-0">
+      <main className="flex-1 overflow-y-auto p-6 lg:p-10 animate-in fade-in duration-500 bg-slate-100 dark:bg-slate-950 no-scrollbar print:p-0">
         <header className="mb-8 flex flex-col sm:flex-row justify-between items-start gap-4 print:hidden">
           <div>
             <h1 className="text-3xl font-black tracking-tight">
               {activeTab === 'overview' ? 'Painel de Desempenho' : 
                activeTab === 'products' ? 'Gestão de Estoque' : 
-               activeTab === 'categories' ? 'Categorias de Produtos' :
-               activeTab === 'orders' ? 'Gerenciamento de Pedidos' : 'Base de Clientes'}
+               activeTab === 'categories' ? 'Categorias e Subcategorias' :
+               activeTab === 'orders' ? 'Fluxo de Logística' : 'Base de Clientes'}
             </h1>
             <p className="text-slate-500">
-              {activeTab === 'overview' ? 'Acompanhe as métricas de vendas em tempo real.' : 'Administre os dados operacionais da Lumina.'}
+              {activeTab === 'orders' ? 'Acompanhe recebimentos e despache mercadorias.' : 'Administre os dados operacionais da Lumina.'}
             </p>
           </div>
           <div className="flex gap-2">
@@ -263,7 +342,7 @@ const AdminDashboard: React.FC = () => {
           <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {stats.map((stat, i) => (
-                <div key={i} className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm">
+                <div key={i} className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all hover:shadow-md">
                   <div className="flex justify-between items-start mb-4">
                     <div className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 ${stat.color}`}>
                       <stat.icon size={24} />
@@ -275,49 +354,26 @@ const AdminDashboard: React.FC = () => {
                 </div>
               ))}
             </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              <div className="bg-white dark:bg-slate-800 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm h-[400px]">
-                <h3 className="text-xl font-bold mb-6">Fluxo de Vendas (7 dias)</h3>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="vendas" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="bg-white dark:bg-slate-800 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
-                <h3 className="text-xl font-bold mb-6">Vendas Recentes</h3>
-                <div className="space-y-4">
-                  {MOCK_ORDERS.slice(0, 4).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-black">{order.customerName[0]}</div>
-                        <div>
-                          <p className="font-bold text-sm">{order.customerName}</p>
-                          <p className="text-xs text-slate-500">{order.date}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-black text-sm">R$ {order.total.toFixed(2)}</p>
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${getStatusColor(order.status)}`}>
-                          {getStatusLabel(order.status)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+            
+            <div className="bg-white dark:bg-slate-800 p-8 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-sm">
+                <h3 className="text-xl font-bold mb-6">Desempenho Semanal</h3>
+                <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData}>
+                            <defs>
+                                <linearGradient id="colorVendas" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                            <YAxis hide />
+                            <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                            <Area type="monotone" dataKey="vendas" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorVendas)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
                 </div>
-              </div>
             </div>
           </div>
         )}
@@ -333,8 +389,24 @@ const AdminDashboard: React.FC = () => {
                   </button>
                   <form onSubmit={handleSaveCategory} className="space-y-6">
                     <div>
-                      <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3 ml-1">Nome da Categoria</label>
+                      <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3 ml-1">Nome da Categoria/Subcategoria</label>
                       <input type="text" required autoFocus value={categoryInputValue} onChange={e => setCategoryInputValue(e.target.value)} placeholder="Ex: Coleção de Inverno..." className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 text-lg font-medium" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3 ml-1">Categoria Pai (Opcional)</label>
+                      <select 
+                        value={parentCategoryId} 
+                        onChange={e => setParentCategoryId(e.target.value)}
+                        className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900 border-none rounded-2xl focus:ring-2 focus:ring-primary-500 text-lg font-medium"
+                      >
+                        <option value="">Nenhuma (Tornar Categoria Principal)</option>
+                        {availableCategories
+                          .filter(c => !c.parentId && c.id !== 'cat-todos' && c.id !== editingCategory?.id)
+                          .map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))
+                        }
+                      </select>
                     </div>
                     <div className="pt-4 flex gap-4">
                       <button type="submit" className="flex-1 bg-primary-600 text-white py-5 rounded-2xl font-black shadow-xl">Salvar</button>
@@ -344,22 +416,43 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {availableCategories.map((cat) => (
-                  <div key={cat} className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center justify-between group">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-slate-50 dark:bg-slate-900 text-primary-600 rounded-2xl"><Tag size={20} /></div>
-                      <div>
-                        <h3 className="font-bold">{cat}</h3>
-                        <p className="text-xs text-slate-500">{products.filter(p => p.category === cat || cat === 'Todos').length} Itens</p>
+              <div className="grid grid-cols-1 gap-6">
+                {mainCategories.map((mainCat) => (
+                  <div key={mainCat.id} className="space-y-4">
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-primary-50 dark:bg-primary-900/20 text-primary-600 rounded-2xl"><Layers size={20} /></div>
+                        <div>
+                          <h3 className="font-bold text-lg">{mainCat.name}</h3>
+                          <p className="text-xs text-slate-500 uppercase tracking-widest font-black">Categoria Principal</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => startEditCategory(mainCat)} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl"><Edit2 size={18} /></button>
+                        <button onClick={() => deleteCategory(mainCat.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"><Trash2 size={18} /></button>
                       </div>
                     </div>
-                    {cat !== 'Todos' && (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => startEditCategory(cat)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl"><Edit2 size={18} /></button>
-                        <button onClick={() => deleteCategory(cat)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl"><Trash2 size={18} /></button>
-                      </div>
-                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-12">
+                      {getSubcategories(mainCat.id).map(sub => (
+                        <div key={sub.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-slate-50 dark:bg-slate-900 text-slate-400 rounded-lg"><Tag size={16} /></div>
+                            <span className="font-bold text-sm">{sub.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => startEditCategory(sub)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"><Edit2 size={14} /></button>
+                            <button onClick={() => deleteCategory(sub.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 size={14} /></button>
+                          </div>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => { setParentCategoryId(mainCat.id); setIsAddingCategory(true); }}
+                        className="p-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl text-slate-400 hover:border-primary-500 hover:text-primary-500 transition-all flex items-center justify-center gap-2 text-sm font-bold"
+                      >
+                        <Plus size={16} /> Nova Subcategoria
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -367,13 +460,38 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* ABA: PEDIDOS PROFISSIONAIS */}
+        {/* ABA: PEDIDOS PROFISSIONAIS (Lógica de Recebimento e Envio) */}
         {activeTab === 'orders' && (
-          <div className="animate-in slide-in-from-bottom-4 duration-500">
-            {/* Modal de Gestão de Pedido */}
+          <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-6">
+            
+            {/* Filtros de Status */}
+            <div className="flex flex-wrap gap-2 mb-4 bg-white dark:bg-slate-800 p-2 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                {[
+                    { id: 'All', label: 'Todos os Pedidos', icon: Filter },
+                    { id: 'Pending', label: 'Pendentes', icon: Clock },
+                    { id: 'Shipped', label: 'Enviados', icon: Truck },
+                    { id: 'Delivered', label: 'Entregues', icon: PackageCheck },
+                    { id: 'Cancelled', label: 'Cancelados', icon: Ban },
+                ].map((f) => (
+                    <button
+                        key={f.id}
+                        onClick={() => setOrderStatusFilter(f.id as any)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                            orderStatusFilter === f.id 
+                            ? 'bg-primary-600 text-white shadow-lg' 
+                            : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                    >
+                        <f.icon size={14} />
+                        {f.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Modal de Gestão de Pedido (Recebimento e Envio) */}
             {selectedOrder && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm print:static print:bg-white print:p-0">
-                <div className={`bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col print:shadow-none print:max-h-none print:w-full print:rounded-none ${orderActionView !== 'details' ? 'bg-slate-50' : ''}`}>
+                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col print:shadow-none print:max-h-none print:w-full print:rounded-none">
                   
                   {/* Cabeçalho do Modal */}
                   <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center print:hidden">
@@ -383,236 +501,176 @@ const AdminDashboard: React.FC = () => {
                       </div>
                       <div>
                         <h2 className="text-2xl font-black">Pedido {selectedOrder.id}</h2>
-                        <p className="text-sm text-slate-500">Gerenciado em {selectedOrder.date}</p>
+                        <p className="text-sm text-slate-500">Recebido em {selectedOrder.date}</p>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <button 
-                        onClick={() => setOrderActionView(orderActionView === 'details' ? 'label' : 'details')}
-                        className="p-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-xl transition-colors font-bold text-xs flex items-center gap-2"
-                      >
-                        {orderActionView === 'details' ? <><Truck size={16} /> Ver Etiqueta</> : <><ArrowLeft size={16} /> Voltar</>}
-                      </button>
-                      <button onClick={() => setSelectedOrder(null)} className="p-3 hover:bg-slate-100 rounded-xl"><X size={24} /></button>
+                        <button onClick={() => setSelectedOrder(null)} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"><X size={24} /></button>
                     </div>
                   </div>
 
-                  {/* Conteúdo Dinâmico do Modal */}
-                  <div className="flex-1 p-8">
-                    {orderActionView === 'details' && (
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
-                        {/* Coluna 1: Dados Cliente e Entrega */}
-                        <div className="lg:col-span-2 space-y-8">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
-                              <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Informações do Cliente</h3>
-                              <div className="space-y-3">
-                                <p className="font-bold flex items-center gap-2"><UserIcon size={16} className="text-primary-500" /> {selectedOrder.customerName}</p>
-                                <p className="text-sm text-slate-500 flex items-center gap-2"><Mail size={16} /> cliente@email.com</p>
-                                <p className="text-sm text-slate-500 flex items-center gap-2"><Phone size={16} /> (11) 98877-6655</p>
-                              </div>
-                            </div>
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
-                              <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Endereço de Entrega</h3>
-                              <div className="space-y-1">
-                                <p className="text-sm font-bold flex items-center gap-2"><MapPin size={16} className="text-primary-500" /> Av. Paulista, 1500</p>
-                                <p className="text-sm text-slate-500 ml-6">Bela Vista, São Paulo - SP</p>
-                                <p className="text-sm text-slate-500 ml-6">CEP: 01310-200</p>
-                              </div>
-                            </div>
-                          </div>
+                  <div className="p-8 space-y-8">
+                    {/* Timeline de Status Logístico */}
+                    <div className="relative flex justify-between items-center max-w-2xl mx-auto mb-10">
+                        <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 dark:bg-slate-800 -translate-y-1/2 z-0" />
+                        <div className={`absolute top-1/2 left-0 h-1 bg-primary-500 -translate-y-1/2 z-0 transition-all duration-700 ${
+                            selectedOrder.status === 'Pending' ? 'w-0' :
+                            selectedOrder.status === 'Shipped' ? 'w-1/2' :
+                            selectedOrder.status === 'Delivered' ? 'w-full' : 'w-0'
+                        }`} />
 
-                          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-                            <h3 className="text-xs font-black uppercase text-slate-400 p-6 border-b border-slate-100 dark:border-slate-800">Itens do Pedido</h3>
-                            <div className="divide-y divide-slate-50 dark:divide-slate-800">
-                              {[1, 2].map((i) => (
-                                <div key={i} className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                                  <img src={products[i % products.length].image} className="w-12 h-16 rounded-lg object-cover" />
-                                  <div className="flex-1">
-                                    <p className="font-bold text-sm">{products[i % products.length].name}</p>
-                                    <p className="text-xs text-slate-500">Tamanho: M | Cor: Original</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="font-black text-sm">R$ {products[i % products.length].price.toFixed(2)}</p>
-                                    <p className="text-xs text-slate-400">Qtd: 1</p>
-                                  </div>
+                        {[
+                            { id: 'Pending', label: 'Recebido', icon: Clock },
+                            { id: 'Shipped', label: 'Enviado', icon: Truck },
+                            { id: 'Delivered', label: 'Entregue', icon: PackageCheck }
+                        ].map((step, idx) => {
+                            const isCompleted = selectedOrder.status === step.id || 
+                                              (selectedOrder.status === 'Shipped' && step.id === 'Pending') ||
+                                              (selectedOrder.status === 'Delivered');
+                            const isCurrent = selectedOrder.status === step.id;
+
+                            return (
+                                <div key={step.id} className="relative z-10 flex flex-col items-center gap-2">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 border-4 ${
+                                        isCompleted 
+                                        ? 'bg-primary-600 border-white dark:border-slate-900 text-white shadow-lg' 
+                                        : 'bg-slate-100 dark:bg-slate-800 border-white dark:border-slate-900 text-slate-400'
+                                    }`}>
+                                        <step.icon size={18} />
+                                    </div>
+                                    <span className={`text-[10px] font-black uppercase tracking-widest ${isCurrent ? 'text-primary-600' : 'text-slate-400'}`}>
+                                        {step.label}
+                                    </span>
                                 </div>
-                              ))}
+                            );
+                        })}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Coluna de Dados */}
+                        <div className="lg:col-span-2 space-y-6">
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800">
+                                <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest flex items-center gap-2">
+                                    <UserIcon size={14} /> Dados do Comprador
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-sm font-bold">{selectedOrder.customerName}</p>
+                                        <p className="text-xs text-slate-500">cliente@email.com</p>
+                                    </div>
+                                    <div className="text-sm">
+                                        <p className="font-bold flex items-center gap-1.5"><MapPin size={14} className="text-primary-500" /> Endereço de Entrega</p>
+                                        <p className="text-xs text-slate-500 leading-relaxed">Av. Paulista, 1500 - Bela Vista, São Paulo - SP<br/>CEP: 01310-200</p>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
-                              <span className="font-bold">Total do Pedido</span>
-                              <span className="text-2xl font-black text-primary-600">R$ {selectedOrder.total.toFixed(2)}</span>
+
+                            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+                                <h3 className="text-xs font-black uppercase text-slate-400 p-6 border-b border-slate-100 dark:border-slate-800">Itens do Pedido</h3>
+                                <div className="divide-y divide-slate-50 dark:divide-slate-800">
+                                    {/* Mock de itens do pedido */}
+                                    <div className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                                        <div className="w-12 h-16 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-bold">LMN</div>
+                                        <div className="flex-1">
+                                            <p className="font-bold text-sm">Produto Lumina Premium</p>
+                                            <p className="text-[10px] text-slate-400 uppercase font-black">Ref: PRD-7788 | Tam: M</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-black text-sm">R$ {selectedOrder.total.toFixed(2)}</p>
+                                            <p className="text-[10px] text-slate-400 font-bold">Qtd: {selectedOrder.items}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+                                    <span className="font-bold">Total Faturado</span>
+                                    <span className="text-2xl font-black text-primary-600">R$ {selectedOrder.total.toFixed(2)}</span>
+                                </div>
                             </div>
-                          </div>
                         </div>
 
-                        {/* Coluna 2: Ações de Gestão */}
+                        {/* Coluna de Ações Logísticas (Recebimento e Envio) */}
                         <div className="space-y-6">
-                          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                            <h3 className="text-xs font-black uppercase text-slate-400 mb-6 tracking-widest">Fluxo do Pedido</h3>
-                            <div className="space-y-3">
-                              <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 font-bold text-sm border border-amber-100 dark:border-amber-900/50">
-                                <AlertCircle size={18} /> Manter Pendente
-                              </button>
-                              <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 font-bold text-sm border border-blue-100 dark:border-blue-900/50">
-                                <Truck size={18} /> Marcar como Enviado
-                              </button>
-                              <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 font-bold text-sm border border-emerald-100 dark:border-emerald-900/50">
-                                <Check size={18} /> Confirmar Entrega
-                              </button>
-                              <div className="h-px bg-slate-100 dark:bg-slate-800 my-4" />
-                              <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 font-bold text-sm border border-rose-100 dark:border-rose-900/50">
-                                <Trash2 size={18} /> Cancelar Pedido
-                              </button>
-                            </div>
-                          </div>
+                            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-xl">
+                                <h3 className="text-xs font-black uppercase text-slate-400 mb-6 tracking-widest">Painel de Despacho</h3>
+                                
+                                <div className="space-y-3">
+                                    {selectedOrder.status === 'Pending' && (
+                                        <>
+                                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-2xl mb-4">
+                                                <p className="text-[10px] font-black text-amber-600 uppercase mb-2">Ação Sugerida</p>
+                                                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">Verifique os itens no estoque e gere a etiqueta de envio.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => updateOrderStatus(selectedOrder.id, 'Shipped')}
+                                                className="w-full flex items-center justify-center gap-3 p-4 rounded-2xl bg-primary-600 text-white font-black text-sm shadow-lg shadow-primary-500/20 transition-all hover:bg-primary-700 active:scale-95"
+                                            >
+                                                <Truck size={18} /> Despachar Pedido
+                                            </button>
+                                        </>
+                                    )}
 
-                          <div className="bg-primary-600 p-6 rounded-3xl text-white shadow-xl shadow-primary-500/20">
-                            <h3 className="text-xs font-black uppercase text-white/60 mb-4 tracking-widest">Documentação</h3>
-                            <div className="space-y-3">
-                              <button onClick={() => setOrderActionView('label')} className="w-full flex items-center justify-between p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-colors font-bold text-sm">
-                                Gerar Etiqueta <Printer size={16} />
-                              </button>
-                              <button onClick={() => setOrderActionView('receipt')} className="w-full flex items-center justify-between p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-colors font-bold text-sm">
-                                Emitir Recibo <FileText size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                                    {selectedOrder.status === 'Shipped' && (
+                                        <>
+                                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl mb-4">
+                                                <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Status: Em Trânsito</p>
+                                                <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">Aguardando confirmação de recebimento pelo transportador.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => updateOrderStatus(selectedOrder.id, 'Delivered')}
+                                                className="w-full flex items-center justify-center gap-3 p-4 rounded-2xl bg-emerald-600 text-white font-black text-sm shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-700 active:scale-95"
+                                            >
+                                                <Check size={18} /> Confirmar Entrega
+                                            </button>
+                                        </>
+                                    )}
 
-                    {/* Visão de Etiqueta Logística (Otimizada para Impressão) */}
-                    {orderActionView === 'label' && (
-                      <div className="flex flex-col items-center animate-in zoom-in-95 duration-300">
-                        <div className="bg-white p-10 border-4 border-black w-full max-w-md text-black font-mono shadow-lg print:border-2 print:shadow-none print:m-0">
-                          <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-4">
-                            <h2 className="text-3xl font-black">LUMINA</h2>
-                            <div className="text-right">
-                              <p className="text-[10px] font-bold">ETIQUETA DE ENVIO</p>
-                              <p className="text-xl font-bold"># {selectedOrder.id}</p>
-                            </div>
-                          </div>
+                                    {selectedOrder.status === 'Delivered' && (
+                                        <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-2xl flex flex-col items-center text-center">
+                                            <div className="w-12 h-12 bg-emerald-500 text-white rounded-full flex items-center justify-center mb-3">
+                                                <PackageCheck size={24} />
+                                            </div>
+                                            <p className="text-sm font-black text-emerald-600 uppercase tracking-widest">Fluxo Concluído</p>
+                                            <p className="text-xs text-slate-500 mt-2">Este pedido já foi entregue ao cliente final.</p>
+                                        </div>
+                                    )}
 
-                          <div className="space-y-6">
-                            <div className="border-b-2 border-black pb-4">
-                              <p className="text-[10px] font-bold mb-1">DESTINATÁRIO</p>
-                              <p className="text-lg font-black uppercase">{selectedOrder.customerName}</p>
-                              <p className="text-sm">AV. PAULISTA, 1500 - BELA VISTA</p>
-                              <p className="text-sm font-bold">01310-200 - SÃO PAULO - SP</p>
-                            </div>
+                                    {selectedOrder.status !== 'Cancelled' && selectedOrder.status !== 'Delivered' && (
+                                        <button 
+                                            onClick={() => updateOrderStatus(selectedOrder.id, 'Cancelled')}
+                                            className="w-full flex items-center justify-center gap-2 p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all text-xs font-bold"
+                                        >
+                                            <Ban size={14} /> Cancelar Operação
+                                        </button>
+                                    )}
 
-                            <div className="border-b-2 border-black pb-4">
-                              <p className="text-[10px] font-bold mb-1">REMETENTE</p>
-                              <p className="text-xs font-bold">LUMINA FASHION PREMIUM</p>
-                              <p className="text-[10px]">RUA DA MODA, 42 - JARDINS</p>
-                              <p className="text-[10px]">01414-001 - SÃO PAULO - SP</p>
-                            </div>
-
-                            <div className="flex justify-between items-center pt-4">
-                              <div className="space-y-2">
-                                <div className="bg-black w-48 h-12" /> {/* Simulação de Barcode */}
-                                <p className="text-[8px] text-center">887766554433221100</p>
-                              </div>
-                              <div className="w-16 h-16 bg-slate-100 flex items-center justify-center border-2 border-black">
-                                <div className="grid grid-cols-3 gap-0.5">
-                                  {[...Array(9)].map((_, i) => <div key={i} className={`w-3 h-3 ${i%2===0 ? 'bg-black' : 'bg-transparent'}`} />)}
+                                    {selectedOrder.status === 'Cancelled' && (
+                                         <div className="p-6 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 rounded-2xl flex flex-col items-center text-center">
+                                            <Ban size={24} className="text-rose-600 mb-2" />
+                                            <p className="text-sm font-black text-rose-600 uppercase">Cancelado</p>
+                                         </div>
+                                    )}
                                 </div>
-                              </div>
                             </div>
-                          </div>
-                        </div>
-                        <div className="mt-8 flex gap-4 print:hidden">
-                          <button onClick={handlePrint} className="bg-primary-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl flex items-center gap-2">
-                            <Printer size={20} /> Imprimir Etiqueta
-                          </button>
-                          <button onClick={() => setOrderActionView('details')} className="px-8 py-4 bg-slate-100 rounded-2xl font-bold">Cancelar</button>
-                        </div>
-                      </div>
-                    )}
 
-                    {/* Visão de Recibo / Nota Simples */}
-                    {orderActionView === 'receipt' && (
-                      <div className="max-w-2xl mx-auto bg-white p-12 border border-slate-200 text-slate-800 animate-in slide-in-from-bottom-4 duration-300 print:border-0 print:p-0">
-                        <div className="flex justify-between items-center mb-10 border-b pb-8">
-                          <div>
-                            <h2 className="text-2xl font-black text-primary-600">LUMINA FASHION</h2>
-                            <p className="text-xs text-slate-500">CNPJ: 12.345.678/0001-99</p>
-                          </div>
-                          <div className="text-right">
-                            <h3 className="font-bold">RECIBO DE VENDA</h3>
-                            <p className="text-sm">Pedido: {selectedOrder.id}</p>
-                            <p className="text-sm">Data: {selectedOrder.date}</p>
-                          </div>
-                        </div>
-
-                        <div className="mb-8">
-                          <h4 className="text-xs font-black uppercase text-slate-400 mb-2">Cliente</h4>
-                          <p className="font-bold">{selectedOrder.customerName}</p>
-                          <p className="text-sm text-slate-500">cliente@email.com</p>
-                        </div>
-
-                        <table className="w-full mb-10">
-                          <thead className="border-b-2 border-slate-900">
-                            <tr className="text-left text-xs font-black uppercase">
-                              <th className="py-3">Descrição</th>
-                              <th className="py-3 text-center">Qtd</th>
-                              <th className="py-3 text-right">Unitário</th>
-                              <th className="py-3 text-right">Subtotal</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {[1, 2].map(i => (
-                              <tr key={i} className="text-sm">
-                                <td className="py-4">Produto Lumina Premium #{i}</td>
-                                <td className="py-4 text-center">1</td>
-                                <td className="py-4 text-right">R$ {(selectedOrder.total / 2).toFixed(2)}</td>
-                                <td className="py-4 text-right">R$ {(selectedOrder.total / 2).toFixed(2)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-
-                        <div className="flex justify-end">
-                          <div className="w-64 space-y-3">
-                            <div className="flex justify-between text-sm">
-                              <span>Subtotal</span>
-                              <span>R$ {selectedOrder.total.toFixed(2)}</span>
+                            <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl shadow-slate-900/20">
+                                <h3 className="text-xs font-black uppercase text-slate-500 mb-4 tracking-widest">Documentação</h3>
+                                <div className="space-y-2">
+                                    <button className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-xs font-bold">
+                                        Emitir Nota Fiscal <FileText size={14} />
+                                    </button>
+                                    <button className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-xs font-bold">
+                                        Etiqueta de Envio <Printer size={14} />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex justify-between text-sm">
-                              <span>Frete</span>
-                              <span>R$ 0,00</span>
-                            </div>
-                            <div className="flex justify-between text-lg font-black border-t pt-3">
-                              <span>Total Pago</span>
-                              <span>R$ {selectedOrder.total.toFixed(2)}</span>
-                            </div>
-                          </div>
                         </div>
-
-                        <div className="mt-20 pt-8 border-t text-center text-[10px] text-slate-400 uppercase tracking-widest print:hidden">
-                          Obrigado pela preferência!
-                        </div>
-
-                        <div className="mt-8 flex justify-center gap-4 print:hidden">
-                          <button onClick={handlePrint} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2">
-                            <Printer size={20} /> Imprimir Recibo
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input type="text" placeholder="Buscar ID ou Cliente..." className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl text-sm border-none focus:ring-2 focus:ring-primary-500" />
-                </div>
-              </div>
+            <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
@@ -620,33 +678,33 @@ const AdminDashboard: React.FC = () => {
                       <th className="px-6 py-4 text-center">ID</th>
                       <th className="px-6 py-4">Cliente</th>
                       <th className="px-6 py-4">Data</th>
-                      <th className="px-6 py-4 text-center">Qtd Itens</th>
+                      <th className="px-6 py-4 text-center">Itens</th>
                       <th className="px-6 py-4">Total</th>
                       <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-center">Gestão</th>
+                      <th className="px-6 py-4 text-center">Gerir</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {MOCK_ORDERS.map((order) => (
-                      <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                    {filteredOrders.map((order) => (
+                      <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
                         <td className="px-6 py-4 font-mono text-[10px] text-center text-slate-400">{order.id}</td>
                         <td className="px-6 py-4 font-bold text-sm">{order.customerName}</td>
                         <td className="px-6 py-4 text-xs text-slate-500">{order.date}</td>
                         <td className="px-6 py-4 text-sm font-medium text-center">{order.items}</td>
-                        <td className="px-6 py-4 font-black text-sm">R$ {order.total.toFixed(2)}</td>
+                        <td className="px-6 py-4 font-black text-sm text-primary-600">R$ {order.total.toFixed(2)}</td>
                         <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${getStatusColor(order.status)}`}>
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${getStatusColor(order.status)}`}>
                             {getStatusLabel(order.status)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <button 
-                            onClick={() => { setSelectedOrder(order); setOrderActionView('details'); }}
-                            className="p-2 text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg flex items-center justify-center mx-auto"
-                            title="Gerenciar Pedido"
-                          >
-                            <Eye size={18} />
-                          </button>
+                            <button 
+                                onClick={() => setSelectedOrder(order)}
+                                className="p-2 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-primary-600 hover:text-white rounded-lg transition-all"
+                                title="Processar Pedido"
+                            >
+                                <ChevronRight size={18} />
+                            </button>
                         </td>
                       </tr>
                     ))}
@@ -660,7 +718,7 @@ const AdminDashboard: React.FC = () => {
         {/* ABA: CLIENTES */}
         {activeTab === 'customers' && (
           <div className="animate-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
@@ -687,7 +745,7 @@ const AdminDashboard: React.FC = () => {
                         <td className="px-6 py-4 text-sm font-medium text-center">{customer.orders}</td>
                         <td className="px-6 py-4 font-black text-sm text-emerald-600">R$ {customer.totalSpent.toFixed(2)}</td>
                         <td className="px-6 py-4 text-center">
-                          <button className="p-2 text-slate-400 hover:text-primary-600 rounded-lg"><MoreVertical size={16} /></button>
+                          <button className="p-2 text-slate-400 hover:text-primary-600 rounded-lg transition-colors"><MoreVertical size={16} /></button>
                         </td>
                       </tr>
                     ))}
@@ -698,80 +756,150 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* ABA: PRODUTOS (CRUD) */}
+        {/* ABA: PRODUTOS */}
         {activeTab === 'products' && (
           <div className="animate-in slide-in-from-bottom-4 duration-500">
             {isAddingProduct ? (
               <div className="bg-white dark:bg-slate-800 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-700 shadow-xl max-w-5xl mx-auto">
                 <div className="flex justify-between items-center mb-10">
                   <h2 className="text-2xl font-black">{editingProduct ? 'Editar Produto' : 'Cadastrar Novo Item'}</h2>
-                  <button onClick={resetProductForm} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full"><X size={24} /></button>
+                  <button onClick={resetProductForm} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={24} /></button>
                 </div>
 
                 <form onSubmit={handleSaveProduct} className="space-y-12">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                     <div className="space-y-6">
-                      <h3 className="text-sm font-black uppercase text-primary-600 border-b border-slate-100 dark:border-slate-700 pb-2">Informações Gerais</h3>
-                      <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Nome do Produto" className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none focus:ring-2 focus:ring-primary-500" />
-                      <textarea required rows={4} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Descrição completa do produto..." className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none focus:ring-2 focus:ring-primary-500" />
+                      <h3 className="text-sm font-black uppercase text-primary-600 border-b border-slate-100 dark:border-slate-700 pb-2 tracking-widest">Informações Gerais</h3>
+                      <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Nome do Produto" className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none focus:ring-2 focus:ring-primary-500 transition-shadow" />
+                      <textarea required rows={4} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Descrição completa do produto..." className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none focus:ring-2 focus:ring-primary-500 transition-shadow" />
                       <div className="grid grid-cols-2 gap-4">
-                        <input type="number" step="0.01" required value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="Preço (R$)" className="px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none" />
-                        <input type="number" required value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} placeholder="Qtd em Estoque" className="px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none" />
+                        <input type="number" step="0.01" required value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} placeholder="Preço (R$)" className="px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none focus:ring-2 focus:ring-primary-500 transition-shadow" />
+                        <input type="number" required value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} placeholder="Qtd em Estoque" className="px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none focus:ring-2 focus:ring-primary-500 transition-shadow" />
                       </div>
-                      <select required value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none">
-                        {availableCategories.filter(c => c !== 'Todos').map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                      </select>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-1">Categoria Principal</label>
+                          <select 
+                            required 
+                            value={formData.category} 
+                            onChange={e => {
+                              setFormData({
+                                ...formData, 
+                                category: e.target.value, 
+                                subCategory: '' 
+                              });
+                            }} 
+                            className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none focus:ring-2 focus:ring-primary-500 transition-shadow"
+                          >
+                            <option value="">Selecione...</option>
+                            {mainCategories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-1">Subvariação (Subcat)</label>
+                          <select 
+                            value={formData.subCategory} 
+                            onChange={e => setFormData({...formData, subCategory: e.target.value})} 
+                            className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border-none focus:ring-2 focus:ring-primary-500 transition-shadow disabled:opacity-50"
+                            disabled={!formData.category}
+                          >
+                            <option value="">Nenhuma</option>
+                            {availableCategories
+                              .filter(c => {
+                                const parent = mainCategories.find(mc => mc.name === formData.category);
+                                return c.parentId === parent?.id;
+                              })
+                              .map(sub => <option key={sub.id} value={sub.name}>{sub.name}</option>)
+                            }
+                          </select>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-6">
-                      <h3 className="text-sm font-black uppercase text-primary-600 border-b border-slate-100 dark:border-slate-700 pb-2">Variações e Mídia</h3>
-                      <div className="flex gap-2">
-                        <input type="text" value={newSize} onChange={e => setNewSize(e.target.value)} placeholder="Tamanho (P, M, G...)" className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-900 rounded-xl" />
-                        <button type="button" onClick={() => { if(newSize.trim()){ setFormData(prev => ({...prev, sizes: [...prev.sizes, newSize.trim()]})); setNewSize(''); } }} className="p-2.5 bg-primary-600 text-white rounded-xl"><Plus size={20} /></button>
+                    <div className="space-y-8">
+                      <h3 className="text-sm font-black uppercase text-primary-600 border-b border-slate-100 dark:border-slate-700 pb-2 tracking-widest">Configuração de Variantes</h3>
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3 ml-1">Variações Disponíveis</label>
+                        <div className="flex gap-2 mb-3">
+                          <input type="text" value={newSize} onChange={e => setNewSize(e.target.value)} placeholder="Ex: Pequeno, Médio..." className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-900 rounded-xl transition-shadow border-none focus:ring-1 focus:ring-primary-500" />
+                          <button type="button" onClick={handleAddSize} className="p-2.5 bg-primary-600 text-white rounded-xl transition-transform active:scale-95 shadow-md"><Plus size={20} /></button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {formData.sizes.map((s, idx) => (
+                            <span key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-600">
+                              {s}
+                              <button type="button" onClick={() => removeSize(idx)} className="text-slate-400 hover:text-red-500"><X size={14} /></button>
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {formData.sizes.map(s => <span key={s} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg text-xs font-bold">{s}</span>)}
-                      </div>
-                      <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-6 text-center cursor-pointer hover:border-primary-500" onClick={() => fileInputRef.current?.click()}>
-                        <Upload size={24} className="mx-auto text-slate-400 mb-2" />
-                        <p className="text-xs font-bold">Upload de Imagens</p>
-                        <input type="file" ref={fileInputRef} onChange={(e) => {
-                          const files = e.target.files;
-                          if (!files) return;
-                          Array.from(files).forEach(file => {
-                            const reader = new FileReader();
-                            reader.onloadend = () => setFormData(prev => ({...prev, images: [...prev.images, reader.result as string]}));
-                            reader.readAsDataURL(file as Blob);
-                          });
-                        }} className="hidden" multiple accept="image/*" />
-                      </div>
-                      <div className="grid grid-cols-4 gap-2">
-                        {formData.images.map((img, idx) => (
-                          <div key={idx} className="relative group">
-                            <img src={img} className="aspect-square object-cover rounded-xl" />
-                            <button onClick={() => setFormData(prev => ({...prev, images: prev.images.filter((_, i) => i !== idx)}))} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={12} /></button>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3 ml-1">Subvariações (Identificadores)</label>
+                        <div className="flex gap-2 mb-3 items-center">
+                          <div className="relative flex-1">
+                            <Palette className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                            <input type="text" value={newColorName} onChange={e => setNewColorName(e.target.value)} placeholder="Nome (Ex: Fosco, Azul)" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 rounded-xl transition-shadow border-none focus:ring-1 focus:ring-primary-500" />
                           </div>
-                        ))}
+                          <input type="color" value={newColorHex} onChange={e => setNewColorHex(e.target.value)} className="w-12 h-10 p-1 bg-slate-50 dark:bg-slate-900 rounded-xl border-none cursor-pointer" />
+                          <button type="button" onClick={handleAddColor} className="p-2.5 bg-primary-600 text-white rounded-xl transition-transform active:scale-95 shadow-md"><Plus size={20} /></button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {formData.colors.map((c, idx) => (
+                            <span key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 shadow-sm">
+                              <div className="w-3 h-3 rounded-full border border-slate-200 shadow-inner" style={{ backgroundColor: c.hex }} />
+                              {c.name}
+                              <button type="button" onClick={() => removeColor(idx)} className="text-slate-400 hover:text-red-500"><X size={14} /></button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3 ml-1">Galeria de Fotos</label>
+                        <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-6 text-center cursor-pointer hover:border-primary-500 transition-colors group" onClick={() => fileInputRef.current?.click()}>
+                          <Upload size={24} className="mx-auto text-slate-400 mb-2 group-hover:text-primary-500 transition-colors" />
+                          <p className="text-xs font-bold text-slate-500">Arraste ou clique para upload</p>
+                          <input type="file" ref={fileInputRef} onChange={(e) => {
+                            const files = e.target.files;
+                            if (!files) return;
+                            Array.from(files).forEach(file => {
+                              const reader = new FileReader();
+                              reader.onloadend = () => setFormData(prev => ({...prev, images: [...prev.images, reader.result as string]}));
+                              reader.readAsDataURL(file as Blob);
+                            });
+                          }} className="hidden" multiple accept="image/*" />
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 mt-4">
+                          {formData.images.map((img, idx) => (
+                            <div key={idx} className="relative group aspect-square">
+                              <img src={img} className="w-full h-full object-cover rounded-xl shadow-sm border border-slate-100 dark:border-slate-700" />
+                              <button type="button" onClick={() => setFormData(prev => ({...prev, images: prev.images.filter((_, i) => i !== idx)}))} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><X size={12} /></button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
                   <div className="pt-8 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-4">
                     <button type="submit" className="flex-1 bg-primary-600 text-white py-5 rounded-2xl font-black shadow-xl transform active:scale-95 transition-all">Salvar Alterações</button>
-                    <button type="button" onClick={resetProductForm} className="px-10 py-5 bg-slate-100 dark:bg-slate-700 rounded-2xl font-bold">Cancelar</button>
+                    <button type="button" onClick={resetProductForm} className="px-10 py-5 bg-slate-100 dark:bg-slate-700 rounded-2xl font-bold transition-colors hover:bg-slate-200">Cancelar</button>
                   </div>
                 </form>
               </div>
             ) : (
-              <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden transition-all">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
                   <div className="relative w-full sm:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input type="text" placeholder="Filtrar por nome..." className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl text-sm border-none focus:ring-2 focus:ring-primary-500" />
+                    <input type="text" placeholder="Filtrar por nome..." className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl text-sm border-none focus:ring-2 focus:ring-primary-500 transition-shadow" />
                   </div>
                   <div className="flex gap-2 items-center">
-                    <span className="text-xs text-slate-400 font-bold uppercase">Filtrar Categoria:</span>
-                    <select value={activeCategoryFilter} onChange={(e) => setActiveCategoryFilter(e.target.value)} className="bg-slate-50 dark:bg-slate-900 border-none rounded-lg text-xs font-bold px-3 py-1.5 focus:ring-0">
-                      {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">Filtro:</span>
+                    <select value={activeCategoryFilter} onChange={(e) => setActiveCategoryFilter(e.target.value)} className="bg-slate-50 dark:bg-slate-900 border-none rounded-lg text-xs font-bold px-3 py-1.5 focus:ring-0 transition-shadow">
+                      <option value="Todos">Todas as Categorias</option>
+                      {availableCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -780,21 +908,24 @@ const AdminDashboard: React.FC = () => {
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 text-xs font-bold uppercase tracking-widest">
                         <th className="px-6 py-4">Produto</th>
-                        <th className="px-6 py-4">Categoria</th>
+                        <th className="px-6 py-4">Categoria/Sub</th>
                         <th className="px-6 py-4">Preço</th>
                         <th className="px-6 py-4">Estoque</th>
                         <th className="px-6 py-4 text-center">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                      {products.filter(p => activeCategoryFilter === 'Todos' || p.category === activeCategoryFilter).map((p) => (
-                        <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                      {products.filter(p => activeCategoryFilter === 'Todos' || p.category === activeCategoryFilter || p.subCategory === activeCategoryFilter).map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors group">
                           <td className="px-6 py-4 flex items-center gap-3">
-                            <img src={p.image} className="w-10 h-10 rounded-lg object-cover" />
+                            <img src={p.image} className="w-10 h-10 rounded-lg object-cover shadow-sm group-hover:scale-105 transition-transform" />
                             <span className="font-bold text-sm">{p.name}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-[10px] font-bold uppercase px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded">{p.category}</span>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-primary-50 dark:bg-primary-900/20 text-primary-600 rounded-md w-fit tracking-wider">{p.category}</span>
+                              {p.subCategory && <span className="text-[9px] font-medium text-slate-400 pl-1">↳ {p.subCategory}</span>}
+                            </div>
                           </td>
                           <td className="px-6 py-4 font-black text-sm">R$ {p.price.toFixed(2)}</td>
                           <td className="px-6 py-4 text-sm font-medium">
@@ -810,13 +941,14 @@ const AdminDashboard: React.FC = () => {
                                   price: p.price.toString(),
                                   stock: p.stock.toString(),
                                   category: p.category,
+                                  subCategory: p.subCategory || '',
                                   images: [p.image, ...p.secondaryImages],
                                   sizes: p.sizes || [],
                                   colors: p.colors || []
                                 });
                                 setIsAddingProduct(true);
-                              }} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"><Edit2 size={16} /></button>
-                              <button onClick={() => deleteProduct(p.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"><Trash2 size={16} /></button>
+                              }} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"><Edit2 size={16} /></button>
+                              <button onClick={() => deleteProduct(p.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><Trash2 size={16} /></button>
                             </div>
                           </td>
                         </tr>

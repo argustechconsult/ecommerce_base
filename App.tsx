@@ -18,33 +18,46 @@ const AppContent: React.FC = () => {
     const handleHashChange = () => {
       const hash = window.location.hash;
       
-      // Regras de Redirecionamento Admin
-      if (user?.role === 'admin') {
-        if (hash !== '#admin' && !hash.startsWith('#admin-login')) {
-          window.location.hash = '#admin';
-          return;
-        }
-        setCurrentPage('admin');
+      // Se não houver hash ou for home, garante que a página atual seja 'home'
+      if (!hash || hash === '' || hash === '#' || hash === '#home') {
+        setCurrentPage('home');
+        setSelectedProductId(null);
         return;
       }
 
-      // Proteção de Rotas para Clientes
-      if (hash === '#auth') {
-        setCurrentPage('auth');
-      } else if (hash === '#admin') {
-        if (!user) setCurrentPage('auth');
-        else if (user.role !== 'admin') {
-          window.location.hash = '';
-          setCurrentPage('home');
-        } else {
+      // Se o usuário já estiver autenticado como admin
+      if (user?.role === 'admin') {
+        if (hash === '#admin') {
           setCurrentPage('admin');
+        } else {
+          window.location.hash = '#admin';
+          setCurrentPage('admin');
+        }
+        return;
+      }
+
+      // Lógica de rotas protegidas e públicas
+      if (hash === '#auth') {
+        if (user) {
+          // Usuário já logado tentando acessar auth volta para home ou checkout
+          window.location.hash = cart.length > 0 ? '#checkout' : '';
+        } else {
+          setCurrentPage('auth');
+        }
+      } 
+      else if (hash === '#admin') {
+        if (!user) {
+          setCurrentPage('auth');
+          window.location.hash = '#auth';
+        } else {
+          setCurrentPage('home');
+          window.location.hash = '';
         }
       }
       else if (hash === '#checkout') {
-        // OBRIGATORIEDADE DE LOGIN PARA CHECKOUT
         if (!user) {
-          window.location.hash = '#auth';
           setCurrentPage('auth');
+          window.location.hash = '#auth';
         } else {
           setCurrentPage('checkout');
         }
@@ -53,19 +66,22 @@ const AppContent: React.FC = () => {
         setCurrentPage('order-success');
       }
       else if (hash.startsWith('#product/')) {
-        setSelectedProductId(hash.split('/')[1]);
+        const id = hash.split('/')[1];
+        setSelectedProductId(id);
         setCurrentPage('product-detail');
       }
       else {
         setCurrentPage('home');
         setSelectedProductId(null);
+        window.location.hash = '';
       }
     };
 
     window.addEventListener('hashchange', handleHashChange);
     handleHashChange();
+    
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [user]);
+  }, [user, cart.length]);
 
   const renderContent = () => {
     switch (currentPage) {
@@ -74,7 +90,6 @@ const AppContent: React.FC = () => {
           if (role === 'admin') {
             window.location.hash = 'admin';
           } else {
-            // Se houver produtos no carrinho, vai para o checkout, senão vai para a home
             if (cart.length > 0) {
               window.location.hash = 'checkout';
             } else {

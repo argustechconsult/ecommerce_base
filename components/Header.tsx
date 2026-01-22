@@ -78,7 +78,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    }, 100);
+    }, 150); // Ligeiro delay para garantir renderização ou navegação
   };
 
   const handleCategoryClick = (cat: string) => {
@@ -92,8 +92,16 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
   };
 
   const handleSearchToggle = () => {
-    setIsSearchOpen(!isSearchOpen);
-    if (isSearchOpen) {
+    const nextSearchState = !isSearchOpen;
+    setIsSearchOpen(nextSearchState);
+    
+    if (nextSearchState) {
+      // Se estamos abrindo a busca, garantimos que estamos na home e rolamos para produtos
+      if (window.location.hash !== '' && !window.location.hash.startsWith('#admin')) {
+        onNavigate('home');
+      }
+      scrollToProducts();
+    } else {
       setSearchQuery('');
     }
   };
@@ -102,8 +110,11 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
     const query = e.target.value;
     setSearchQuery(query);
     
-    if (window.location.hash !== '' && !window.location.hash.startsWith('#admin') && query.length > 0) {
-      onNavigate('home');
+    // Se começar a digitar e não estiver na home (ou estiver no topo), rola para os produtos
+    if (!isAdmin) {
+      if (window.location.hash !== '' && !window.location.hash.startsWith('#admin')) {
+        onNavigate('home');
+      }
       scrollToProducts();
     }
   };
@@ -124,7 +135,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 h-20">
-      <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between gap-4">
+      <div className={`${isAdmin ? 'w-full px-6' : 'max-w-7xl mx-auto px-4'} h-full flex items-center justify-between gap-4`}>
         {!isAdmin && (
           <button 
             className="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
@@ -171,18 +182,19 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
 
         {/* Navegação de Categorias (Sempre visível no desktop) */}
         {!isAdmin && (
-          <nav className="hidden lg:flex items-center space-x-6 px-2 overflow-x-auto no-scrollbar">
-            {categories.filter(c => c !== 'Todos').map((cat) => (
+          <nav className="hidden lg:flex items-center space-x-8 px-2 overflow-x-auto no-scrollbar">
+            {/* Fix: Compare Category.name with string and filter for main categories only */}
+            {categories.filter(c => c.name !== 'Todos' && !c.parentId).map((cat) => (
               <button 
-                key={cat} 
-                onClick={() => handleCategoryClick(cat)}
-                className={`text-sm font-bold transition-all whitespace-nowrap ${
-                  selectedCategory === cat && !searchQuery
-                  ? 'text-primary-600' 
+                key={cat.id} 
+                onClick={() => handleCategoryClick(cat.name)}
+                className={`text-lg font-bold transition-all whitespace-nowrap ${
+                  selectedCategory === cat.name && !searchQuery
+                  ? 'text-primary-600 underline underline-offset-8 decoration-2' 
                   : 'text-slate-600 dark:text-slate-300 hover:text-primary-600'
                 }`}
               >
-                {cat}
+                {cat.name}
               </button>
             ))}
           </nav>
@@ -193,10 +205,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
           {!isAdmin && (
             <button 
               className="md:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-              onClick={() => {
-                setIsSearchOpen(!isSearchOpen);
-                if (isSearchOpen) setSearchQuery('');
-              }}
+              onClick={handleSearchToggle}
             >
               {isSearchOpen ? <X size={20} /> : <Search size={20} />}
             </button>
@@ -231,7 +240,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
                       onClick={() => onNavigate('admin')}
                       className="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-2 font-bold text-primary-600"
                     >
-                      <LayoutDashboard size={14} /> Painel Adm
+                      <LayoutDashboard size={14} />
                     </button>
                   )}
                   <button 
@@ -374,13 +383,14 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
             >
               Início
             </button>
-            {categories.filter(c => c !== 'Todos').map((cat) => (
+            {/* Fix: Compare Category.name with string and filter for main categories only */}
+            {categories.filter(c => c.name !== 'Todos' && !c.parentId).map((cat) => (
               <button 
-                key={cat} 
-                onClick={() => handleCategoryClick(cat)}
-                className={`text-2xl font-black text-left ${selectedCategory === cat && !searchQuery ? 'text-primary-600' : ''}`}
+                key={cat.id} 
+                onClick={() => handleCategoryClick(cat.name)}
+                className={`text-2xl font-black text-left ${selectedCategory === cat.name && !searchQuery ? 'text-primary-600' : ''}`}
               >
-                {cat}
+                {cat.name}
               </button>
             ))}
           </nav>

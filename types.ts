@@ -1,10 +1,17 @@
 
+export interface Category {
+  id: string;
+  name: string;
+  parentId?: string; // Se presente, identifica que é uma subcategoria
+}
+
 export interface Product {
   id: string;
   name: string;
   price: number;
   description: string;
-  category: string; // Changed from enum to string for dynamic creation
+  category: string; 
+  subCategory?: string; // Nova propriedade para subcategorias
   image: string;
   secondaryImages: string[];
   stock: number;
